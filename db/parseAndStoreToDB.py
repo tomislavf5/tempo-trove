@@ -27,10 +27,10 @@ def create_artist_objects(names, ids):
 
 # read and combine three csv files
 
-tracks = pd.read_csv("modified_tracks_features.csv", dtype={"id": "string", "name": "string", "album": "string", "album_id": "string", "artists": object, "artist_ids": object,
+tracks = pd.read_csv("tracks_features.csv", dtype={"id": "string", "name": "string", "album": "string", "album_id": "string", "artists": object, "artist_ids": object,
  "explicit": "boolean", "norm_danceability": "Float32", "norm_energy": "Float32", "norm_key": "Float32", "norm_loudness": "Float32",
   "norm_mode": "Float32", "norm_speechiness": "Float32", "norm_acousticness": "Float32", "norm_instrumentalness": "Float32", "norm_liveness": "Float32", "norm_valence": "Float32", "norm_tempo": "Float32",
-   "norm_duration_ms": "Float32", "norm_time_signature": "Float32", "norm_year": "Float32"})
+   "norm_duration": "Float32", "norm_time_signature": "Float32", "norm_year": "Float32"})
 
 counter = 0
 
@@ -54,14 +54,15 @@ for index, row in tracks.iterrows():
         "liveness": row['norm_liveness'],
         "valence": row['norm_valence'],
         "tempo": row['norm_tempo'],
-        "duration_ms": row['norm_duration_ms'],
+        "duration_ms": row['norm_duration'],
         "time_signature": row['norm_time_signature'],
         "year": row['norm_year']
     })
-    except:
+    except Exception as e:
         print('Invalid row: ')
+        print(e)
         print(row)
 
     counter = counter + 1
-    if counter == 10000:
+    if counter == 100:
         break
