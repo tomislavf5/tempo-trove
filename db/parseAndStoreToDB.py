@@ -2,6 +2,7 @@ from pymongo import MongoClient
 import pandas as pd
 import json
 
+
 # Connect to the database
 client=MongoClient()
 client = MongoClient('localhost', port=27017, username="admin", password="password")
@@ -25,7 +26,8 @@ def create_artist_objects(names, ids):
    return artists
 
 # read and combine three csv files
-tracks = pd.read_csv("tracks_features.csv", dtype={"id": "string", "name": "string", "album": "string", "album_id": "string", "artists": object, "artist_ids": object,
+
+tracks = pd.read_csv("modified_tracks_features.csv", dtype={"id": "string", "name": "string", "album": "string", "album_id": "string", "artists": object, "artist_ids": object,
  "explicit": "boolean", "norm_danceability": "Float32", "norm_energy": "Float32", "norm_key": "Float32", "norm_loudness": "Float32",
   "norm_mode": "Float32", "norm_speechiness": "Float32", "norm_acousticness": "Float32", "norm_instrumentalness": "Float32", "norm_liveness": "Float32", "norm_valence": "Float32", "norm_tempo": "Float32",
    "norm_duration_ms": "Float32", "norm_time_signature": "Float32", "norm_year": "Float32"})
