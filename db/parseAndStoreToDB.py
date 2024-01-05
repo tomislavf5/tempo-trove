@@ -26,9 +26,9 @@ def create_artist_objects(names, ids):
 
 # read and combine three csv files
 tracks = pd.read_csv("tracks_features.csv", dtype={"id": "string", "name": "string", "album": "string", "album_id": "string", "artists": object, "artist_ids": object,
- "track_number": "Int64", "disc_number": "Int64", "explicit": "boolean", "danceability": "Float32", "energy": "Float32", "key": "Int64", "loudness": "Float32",
-  "mode": "Int64", "speechiness": "Float32", "acousticness": "Float32", "instrumentalness": "Float32", "liveness": "Float32", "valence": "Float32", "tempo": "Float32",
-   "duration_ms": "Int64", "time_signature": "Float32", "year": "Int64", "release_date": "string"})
+ "explicit": "boolean", "norm_danceability": "Float32", "norm_energy": "Float32", "norm_key": "Float32", "norm_loudness": "Float32",
+  "norm_mode": "Float32", "norm_speechiness": "Float32", "norm_acousticness": "Float32", "norm_instrumentalness": "Float32", "norm_liveness": "Float32", "norm_valence": "Float32", "norm_tempo": "Float32",
+   "norm_duration_ms": "Float32", "norm_time_signature": "Float32", "norm_year": "Float32"})
 
 counter = 0
 
@@ -40,29 +40,26 @@ for index, row in tracks.iterrows():
         "album": row['album'],
         "album_id": row['album_id'],
         "artists": create_artist_objects(row['artists'], row['artist_ids']),
-        "track_number": row['track_number'],
-        "disc_number": row['disc_number'],
-        "explicit": row['explicit'],
-        "danceability": row['danceability'],
-        "energy": row['energy'],
-        "key": row['key'],
-        "loudness": row['loudness'],
-        "mode": row['mode'],
-        "speechiness": row['speechiness'],
-        "acousticness": row['acousticness'],
-        "instrumentalness": row['instrumentalness'],
-        "liveness": row['liveness'],
-        "valence": row['valence'],
-        "tempo": row['tempo'],
-        "duration_ms": row['duration_ms'],
-        "time_signature": row['time_signature'],
-        "year": row['year'],
-        "release_date": row['release_date']
+        "explicit": int(row['explicit']),
+        "danceability": row['norm_danceability'],
+        "energy": row['norm_energy'],
+        "key": row['norm_key'],
+        "loudness": row['norm_loudness'],
+        "mode": row['norm_mode'],
+        "speechiness": row['norm_speechiness'],
+        "acousticness": row['norm_acousticness'],
+        "instrumentalness": row['norm_instrumentalness'],
+        "liveness": row['norm_liveness'],
+        "valence": row['norm_valence'],
+        "tempo": row['norm_tempo'],
+        "duration_ms": row['norm_duration_ms'],
+        "time_signature": row['norm_time_signature'],
+        "year": row['norm_year']
     })
     except:
         print('Invalid row: ')
         print(row)
 
-    # counter = counter + 1
-    # if counter == 10:
-    #     break
+    counter = counter + 1
+    if counter == 10000:
+        break
