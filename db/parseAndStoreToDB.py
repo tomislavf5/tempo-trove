@@ -64,5 +64,5 @@ for index, row in tracks.iterrows():
         print(row)
 
     counter = counter + 1
-    if counter == 100:
-        break
+    if counter == 100000:
+       break

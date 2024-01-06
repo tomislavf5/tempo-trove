@@ -6,6 +6,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
+from scipy.spatial import distance
+from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
+from typing import List, Dict
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
 
 app = FastAPI()
 
@@ -13,7 +20,23 @@ app = FastAPI()
 client=MongoClient()
 client = MongoClient('localhost', port=27017, username="admin", password="password")
 db = client["tempo-trove-db"]
+col = db['tracks']
 
+
+data = list(col.find())
+df = pd.DataFrame(data)
+
+feature_cols=['explicit', 'mode', 'speechiness', 'key', 'acousticness',
+              'instrumentalness', 'liveness', 'valence', 'tempo', 'duration_ms',
+              'time_signature', 'year', 'energy', 'danceability', 'loudness',]
+
+# Assuming df is your DataFrame and feature_cols are your feature columns
+normalized_df = df[feature_cols].copy()
+
+# Fit a NearestNeighbors model to the data
+neighborsModel = NearestNeighbors(n_neighbors=1500).fit(normalized_df)
+
+indices = pd.Series(df.index, index=df['name']).drop_duplicates()
 
 # Mongo id schema
 class PyObjectId(ObjectId):
@@ -31,17 +54,32 @@ class PyObjectId(ObjectId):
     def __get_pydantic_json_schema__(cls, field_schema, handler):
         handler(field_schema.update(type="string"))
 
-
 # Autocomplete model
-class AutocompleteModel(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    name: str =  Field(...)
-    album: str =  Field(...)
+class Artist(BaseModel):
+  name: str
+  id: str
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+class AutocompleteModel(BaseModel):
+  id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+  name: str = Field(...)
+  album: str = Field(...)
+
+  class Config:
+      populate_by_name = True
+      arbitrary_types_allowed = True
+      json_encoders = {ObjectId: str}
+
+# Suggestion model
+class SuggestionModel(BaseModel):
+  id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+  name: str = Field(...)
+  album: str = Field(...)
+  artists: List[Artist] = Field(...)
+
+  class Config:
+      populate_by_name = True
+      arbitrary_types_allowed = True
+      json_encoders = {ObjectId: str}
 
 #  cors
 origins = ["*"]
@@ -58,7 +96,55 @@ app.add_middleware(
 # Returns the first 10 tracks whose name satisfies the search string
 @app.get("/search", response_model=List[AutocompleteModel])
 def search_tracks(search: str = ""):
-    print(search)
-    tracks = list(db.tracks.find({"name": {"$regex": search.lower(), "$options" :'i'}}, {"name": 1, "album": 1}).limit(10))
-    print(tracks)
-    return tracks
+   print(search)
+   tracks = list(db.tracks.find({"name": {"$regex": search.lower(), "$options" :'i'}}, {"name": 1, "album": 1}).limit(10))
+   print(tracks)
+   return tracks
+
+class SongTitles(BaseModel):
+  song_titles: List[str]
+
+@app.post("/suggest_songs", response_model=List[SuggestionModel])
+def generate_recommendation(song_titles: SongTitles):
+ # Initialize an empty list to store the scores
+ scores = []
+
+ # Create a vector representation for each song
+ song_vectors = df[feature_cols].values
+
+ # Fit the Nearest Neighbors model
+ neighborsModel = NearestNeighbors()
+ neighborsModel.fit(normalized_df)
+ print("Model fitted successfully.")
+
+ # Find the nearest neighbors for each song
+ for song_title in song_titles.song_titles:
+    if song_title not in df['name'].values:
+        print(f"No song titled '{song_title}' found.")
+    else:
+        print(f"Found song titled '{song_title}'.")
+        # Get song index
+        index = indices[song_title]
+        # Calculate the score for the song
+        dist, ind = neighborsModel.kneighbors(normalized_df.iloc[[index]], n_neighbors=len(normalized_df)-1)
+        scores.extend(zip(ind[0], dist[0]))
+
+ # Filter out the songs from song_titles
+ filtered_scores = [(score[0], score[1]) for score in scores if df['name'].iloc[score[0]] not in song_titles.song_titles]
+
+ # Sort the scores
+ sorted_scores = sorted(filtered_scores, key=lambda x: x[1], reverse=False)
+ print("Sorted scores successfully.")
+
+ # Select the top-10 recommended songs
+ top_songs_index = [score[0] for score in sorted_scores[:10]]
+
+ # Convert the pandas.Series object to a list of Artist objects
+ artists = [[Artist(name=artist['name'], id=artist['id']) for artist in df['artists'].iloc[i]] for i in top_songs_index]
+
+ # Create a list of song names
+ song_names = [df['name'].iloc[i] for i in top_songs_index]
+
+ # Pass the list of Artist objects and song names to the AutocompleteModel
+ top_songs=[SuggestionModel(id=df['_id'].iloc[i], name=song_names[i], album=df['album'].iloc[i], artists=artists[i]) for i in range(len(artists))]
+ return top_songs
