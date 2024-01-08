@@ -73,9 +73,10 @@ function App() {
      setLoadingRecommendations(true);
      // Extract song titles from selectedTracks
      const songTitles = selectedTracks.map(track => track.name);
+     const albums = selectedTracks.map(track => track.album);
      const response = await axios.post<Autocomplete[]>(
        'http://127.0.0.1:8000/suggest_songs',
-       { song_titles: songTitles }
+       { song_titles: songTitles, albums: albums }
      ).catch(error => {
        console.error(error);
        setLoadingRecommendations(false);
@@ -106,17 +107,17 @@ function App() {
              ref={searchRef}
            />
            <div className="bg-gray-200">
-             {suggestions &&
-               showSuggestions &&
-               suggestions.map((suggestion) => (
-                <p
-                key={suggestion._id}
-                className="cursor-pointer hover:bg-gray-300 w-full text-center"
-                onClick={() => onSelectTrack(suggestion)}
-                >
-                {suggestion.name} - {suggestion.album}
-                </p>
-               ))}
+                      {suggestions &&
+            showSuggestions &&
+            suggestions.map((suggestion) => (
+            <p
+            key={suggestion._id}
+            className="cursor-pointer hover:bg-gray-300 w-full text-center"
+            onClick={() => onSelectTrack(suggestion)}
+            >
+            {suggestion.name} - {suggestion.album} - {suggestion.artists.map(artist => artist.name).join(', ')}
+            </p>
+            ))}
            </div>
          </div>
          <div>

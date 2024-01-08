@@ -34,9 +34,13 @@ feature_cols=['explicit', 'mode', 'speechiness', 'key', 'acousticness',
 normalized_df = df[feature_cols].copy()
 
 # Fit a NearestNeighbors model to the data
-neighborsModel = NearestNeighbors(n_neighbors=1500).fit(normalized_df)
+neighborsModel = NearestNeighbors(n_neighbors=1500, metric='cosine').fit(normalized_df)
 
-indices = pd.Series(df.index, index=df['name']).drop_duplicates()
+# Create a new column 'album_name' in the dataframe that combines 'name' and 'album'
+df['album_name'] = df['name'] + ' - ' + df['album']
+
+# Create a new series that maps song names along with their album names to their indices
+indices = pd.Series(df.index, index=df['album_name']).drop_duplicates()
 
 # Mongo id schema
 class PyObjectId(ObjectId):
@@ -63,6 +67,7 @@ class AutocompleteModel(BaseModel):
   id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
   name: str = Field(...)
   album: str = Field(...)
+  artists: List[Artist] = Field(...)
 
   class Config:
       populate_by_name = True
@@ -97,12 +102,14 @@ app.add_middleware(
 @app.get("/search", response_model=List[AutocompleteModel])
 def search_tracks(search: str = ""):
    print(search)
-   tracks = list(db.tracks.find({"name": {"$regex": search.lower(), "$options" :'i'}}, {"name": 1, "album": 1}).limit(10))
+   tracks = list(db.tracks.find({"name": {"$regex": search.lower(), "$options" :'i'}}, {"name": 1, "album": 1, "artists": 1}).limit(20))
    print(tracks)
    return tracks
 
 class SongTitles(BaseModel):
   song_titles: List[str]
+  albums: List[str]
+  
 
 @app.post("/suggest_songs", response_model=List[SuggestionModel])
 def generate_recommendation(song_titles: SongTitles):
@@ -118,15 +125,17 @@ def generate_recommendation(song_titles: SongTitles):
  print("Model fitted successfully.")
 
  # Find the nearest neighbors for each song
- for song_title in song_titles.song_titles:
-    if song_title not in df['name'].values:
-        print(f"No song titled '{song_title}' found.")
-    else:
-        print(f"Found song titled '{song_title}'.")
+ for song_title, album_title in zip(song_titles.song_titles, song_titles.albums):
+   full_title = song_title + ' - ' + album_title
+   if full_title not in indices.index:
+       print(f"No song titled '{full_title}' found.")
+   else:
+        print(f"Found song titled '{full_title}'.")
+
         # Get song index
-        index = indices[song_title]
+        index = indices[full_title]
         # Calculate the score for the song
-        dist, ind = neighborsModel.kneighbors(normalized_df.iloc[[index]], n_neighbors=len(normalized_df)-1)
+        dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1), n_neighbors=len(normalized_df)-1)
         scores.extend(zip(ind[0], dist[0]))
 
  # Filter out the songs from song_titles
