@@ -34,7 +34,7 @@ feature_cols=['explicit', 'mode', 'speechiness', 'key', 'acousticness',
 normalized_df = df[feature_cols].copy()
 
 # Fit a NearestNeighbors model to the data
-neighborsModel = NearestNeighbors(n_neighbors=1500, metric='cosine').fit(normalized_df)
+neighborsModel = NearestNeighbors(n_neighbors=5, metric='cosine').fit(normalized_df)
 
 # Create a new column 'album_name' in the dataframe that combines 'name' and 'album'
 df['album_name'] = df['name'] + ' - ' + df['album']
@@ -113,47 +113,95 @@ class SongTitles(BaseModel):
 
 @app.post("/suggest_songs", response_model=List[SuggestionModel])
 def generate_recommendation(song_titles: SongTitles):
- # Initialize an empty list to store the scores
- scores = []
+  # Initialize an empty list to store the scores
+  najslicnijiIndeksi = []
 
- # Create a vector representation for each song
- song_vectors = df[feature_cols].values
+  # Create a vector representation for each song
+  song_vectors = df[feature_cols].values
 
- # Fit the Nearest Neighbors model
- neighborsModel = NearestNeighbors()
- neighborsModel.fit(normalized_df)
- print("Model fitted successfully.")
+  # Fit the Nearest Neighbors model
+  neighborsModel = NearestNeighbors()
+  neighborsModel.fit(normalized_df)
+  print("Model fitted successfully.")
 
- # Find the nearest neighbors for each song
- for song_title, album_title in zip(song_titles.song_titles, song_titles.albums):
-   full_title = song_title + ' - ' + album_title
-   if full_title not in indices.index:
-       print(f"No song titled '{full_title}' found.")
-   else:
-        print(f"Found song titled '{full_title}'.")
+  # Find the nearest neighbors for each song
+  for song_title, album_title in zip(song_titles.song_titles, song_titles.albums):
+    full_title = song_title + ' - ' + album_title
+    if full_title not in indices.index:
+        print(f"No song titled '{full_title}' found.")
+    else:
+          print(f"Found song titled '{full_title}'.")
 
-        # Get song index
-        index = indices[full_title]
-        # Calculate the score for the song
-        dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1), n_neighbors=len(normalized_df)-1)
-        scores.extend(zip(ind[0], dist[0]))
+          # Get song index
+          index = indices[full_title]
+          # Calculate the score for the song
+          dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1))
+          najslicnijiIndeksi.extend(ind[0])
 
- # Filter out the songs from song_titles
- filtered_scores = [(score[0], score[1]) for score in scores if df['name'].iloc[score[0]] not in song_titles.song_titles]
+  # Filter out the songs from song_titles
+  najslicnijiIndeksi = list(set(najslicnijiIndeksi))
+  najslicnijiVektori = normalized_df[normalized_df.index.isin(najslicnijiIndeksi)]
+  najslicnijiVektori = najslicnijiVektori.to_string(header=False, index=False)
+  najslicnijePjesme = df[df.index.isin(najslicnijiIndeksi)]
 
- # Sort the scores
- sorted_scores = sorted(filtered_scores, key=lambda x: x[1], reverse=False)
- print("Sorted scores successfully.")
+  # Remove leading and trailing whitespace
+  najslicnijiVektori = najslicnijiVektori.strip()
+ 
+  # Split the string into lines
+  lines = najslicnijiVektori.split('\n')
+ 
+  # Split each line into a list of values
+  vektori = [line.split() for line in lines]
 
- # Select the top-10 recommended songs
- top_songs_index = [score[0] for score in sorted_scores[:10]]
+  # Convert each value in the vektori to float
+  vektori = [[float(value) for value in row] for row in vektori]
 
- # Convert the pandas.Series object to a list of Artist objects
- artists = [[Artist(name=artist['name'], id=artist['id']) for artist in df['artists'].iloc[i]] for i in top_songs_index]
+  # Convert your list of vectors to a 2D numpy array
+  matrica_vektora = np.array(vektori)
 
- # Create a list of song names
- song_names = [df['name'].iloc[i] for i in top_songs_index]
+  # Compute cosine similarity matrix
+  sim = cosine_similarity(matrica_vektora)
 
- # Pass the list of Artist objects and song names to the AutocompleteModel
- top_songs=[SuggestionModel(id=df['_id'].iloc[i], name=song_names[i], album=df['album'].iloc[i], artists=artists[i]) for i in range(len(artists))]
- return top_songs
+ 
+
+
+
+  # Find indices of favorites in the most_similar_movies list
+  indeksi = []
+  for song_title in song_titles.song_titles:
+      for idx, item in enumerate(najslicnijePjesme.iterrows()):
+        if item[1]['name'].strip() == song_title:
+          indeksi.append(idx)
+          break
+
+  # initialize a new list of zeros, length of movies / row in matrix
+  avg_sim = [0] * len(najslicnijePjesme)
+
+  # add values from each favorite movie 's similarity vector and calculate average
+  for index in indeksi:
+      for col, value in enumerate(sim[index]):
+        avg_sim[col] += value / len(indeksi)
+
+  # create pairs of movie index and calculated average similarity
+  avg_sim = list(enumerate(avg_sim))
+  avg_sim = sorted(avg_sim, key = lambda x: x[1], reverse = True)# Remove original picks
+  avg_sim = [sim_pair
+      for sim_pair in avg_sim
+        if sim_pair[0] not in indeksi
+  ]
+
+  most_similar = avg_sim[0: 15]
+
+
+  recommendations = []
+
+  for i in range(len(most_similar)):
+    row = najslicnijePjesme.iloc[most_similar[i][0]]
+    song_name, song_album, song_artists = row['name'], row['album'], row['artists']
+    artist_objects = [Artist(name=artist['name'], id=artist['id']) for artist in song_artists]
+    recommendation = SuggestionModel(name=song_name, album=song_album, artists=artist_objects)
+    recommendations.append(recommendation)
+
+  return recommendations
+
+ 
