@@ -34,7 +34,7 @@ feature_cols=['explicit', 'mode', 'speechiness', 'key', 'acousticness',
 normalized_df = df[feature_cols].copy()
 
 # Fit a NearestNeighbors model to the data
-neighborsModel = NearestNeighbors(n_neighbors=5, metric='cosine').fit(normalized_df)
+neighborsModel = NearestNeighbors(n_neighbors=1500, metric='cosine').fit(normalized_df)
 
 # Create a new column 'album_name' in the dataframe that combines 'name' and 'album'
 df['album_name'] = df['name'] + ' - ' + df['album']
@@ -135,8 +135,9 @@ def generate_recommendation(song_titles: SongTitles):
           # Get song index
           index = indices[full_title]
           # Calculate the score for the song
-          dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1))
+          dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1), n_neighbors=1500)
           najslicnijiIndeksi.extend(ind[0])
+          print(len(najslicnijiIndeksi))
 
   # Filter out the songs from song_titles
   najslicnijiIndeksi = list(set(najslicnijiIndeksi))
@@ -190,7 +191,7 @@ def generate_recommendation(song_titles: SongTitles):
         if sim_pair[0] not in indeksi
   ]
 
-  most_similar = avg_sim[0: 15]
+  most_similar = avg_sim[0:15]
 
 
   recommendations = []
