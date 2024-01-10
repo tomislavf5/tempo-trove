@@ -135,7 +135,7 @@ function App() {
          {selectedTracks?.length > 0 && (
            <div>
              <button
-               className="bg-blue-300 p-2 rounded-full"
+               className="bg-red-300 p-2 rounded-full"
                onClick={fetchRecommendations}
              >
                Fetch suggestions
@@ -144,7 +144,7 @@ function App() {
          )}
        </div>
      </div>
-     <div>
+     <div className='pl-4'>
        {loadingRecommendations && <p>Loading recommendations...</p>}
        {recommendations.map((song, index) => (
          <p key={index}>{song.name} - {song.artists[0].name}</p>
