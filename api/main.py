@@ -13,7 +13,6 @@ from typing import List, Dict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
-from sklearn.model_selection import GridSearchCV
 
 app = FastAPI()
 
@@ -120,11 +119,8 @@ def generate_recommendation(song_titles: SongTitles):
   # Create a vector representation for each song
   song_vectors = df[feature_cols].values
 
+  # Fit the Nearest Neighbors model
   neighborsModel = NearestNeighbors()
-  param_grid = {'n_neighbors': [3, 10, 30, 50, 100, 200]}
-  grid_search = GridSearchCV(neighborsModel, param_grid, cv=5)
-  grid_search.fit(normalized_df)
-  print(grid_search.best_params_)
   neighborsModel.fit(normalized_df)
   print("Model fitted successfully.")
 

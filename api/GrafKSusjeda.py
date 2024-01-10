@@ -13,7 +13,10 @@ from typing import List, Dict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
-import matplotlib.pyplot as plt
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import make_scorer
+from sklearn.metrics import mean_squared_error
+from sklearn.neighbors import KNeighborsClassifier
 
 app = FastAPI()
 
@@ -114,60 +117,107 @@ class SongTitles(BaseModel):
 
 @app.post("/suggest_songs", response_model=List[SuggestionModel])
 def generate_recommendation(song_titles: SongTitles):
-  avg_sim_values = []
-  for num_neighbors in range(2, 100):
-      neighborsModel = NearestNeighbors(n_neighbors=num_neighbors)
-      neighborsModel.fit(normalized_df)
-      najslicnijiIndeksi = []
-      for song_title, album_title in zip(song_titles.song_titles, song_titles.albums):
-          full_title = song_title + ' - ' + album_title
-          if full_title not in indices.index:
-              print(f"No song titled '{full_title}' found.")
-          else:
-              print(f"Found song titled '{full_title}'.")
-              index = indices[full_title]
-              dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1), n_neighbors=num_neighbors)
-              najslicnijiIndeksi.extend(ind[0])
-      najslicnijiIndeksi = list(set(najslicnijiIndeksi))
-      najslicnijiVektori = normalized_df[normalized_df.index.isin(najslicnijiIndeksi)]
-      najslicnijiVektori = najslicnijiVektori.to_string(header=False, index=False)
-      najslicnijePjesme = df[df.index.isin(najslicnijiIndeksi)]
-      najslicnijiVektori = najslicnijiVektori.strip()
-      lines = najslicnijiVektori.split('\n')
-      vektori = [line.split() for line in lines]
-      vektori = [[float(value) for value in row] for row in vektori]
-      matrica_vektora = np.array(vektori)
-      sim = cosine_similarity(matrica_vektora)
-      indeksi = []
-      for song_title in song_titles.song_titles:
-          for idx, item in enumerate(najslicnijePjesme.iterrows()):
-              if item[1]['name'].strip() == song_title:
+    najslicnijiIndeksi = []
+    song_vectors = df[feature_cols].values
+
+    n_neighbors_values = [100, 300, 600, 900, 1200, 1500, 1800, 2100, 2500, 4000, 6000]
+    avg_similarities = {}
+
+    for n_neighbors in n_neighbors_values:
+        print("current n: ", n_neighbors)
+        neighborsModel = NearestNeighbors(n_neighbors=n_neighbors, metric='cosine')
+        neighborsModel.fit(normalized_df)
+
+        avg_similarity = 0
+        for song_title, album_title in zip(song_titles.song_titles, song_titles.albums):
+            full_title = song_title + ' - ' + album_title
+            if full_title not in indices.index:
+                continue
+
+            index = indices[full_title]
+            dist, ind = neighborsModel.kneighbors(normalized_df.iloc[index].values.reshape(1, -1), n_neighbors=n_neighbors)
+            najslicnijiIndeksi.extend(ind[0])
+
+        najslicnijiIndeksi = list(set(najslicnijiIndeksi))
+        najslicnijiVektori = normalized_df[normalized_df.index.isin(najslicnijiIndeksi)]
+        najslicnijePjesme = df[df.index.isin(najslicnijiIndeksi)]
+
+        najslicnijiVektori = najslicnijiVektori.to_string(header=False, index=False)
+        najslicnijiVektori = najslicnijiVektori.strip()
+        lines = najslicnijiVektori.split('\n')
+        vektori = [line.split() for line in lines]
+        vektori = [[float(value) for value in row] for row in vektori]
+        matrica_vektora = np.array(vektori)
+
+        sim = cosine_similarity(matrica_vektora)
+
+        indeksi = []
+        for song_title in song_titles.song_titles:
+            for idx, item in enumerate(najslicnijePjesme.iterrows()):
+                if item[1]['name'].strip() == song_title:
+                    indeksi.append(idx)
+                    break
+
+        avg_sim = [0] * len(najslicnijePjesme)
+        for index in indeksi:
+            for col, value in enumerate(sim[index]):
+                avg_sim[col] += value / len(indeksi)
+
+        avg_sim = list(enumerate(avg_sim))
+        avg_sim = sorted(avg_sim, key = lambda x: x[1], reverse = True)
+        avg_sim = [sim_pair for sim_pair in avg_sim if sim_pair[0] not in indeksi]
+
+        most_similar = avg_sim[0:15]
+
+        if len(most_similar) > 0:
+            avg_similarity = sum([item[1] for item in most_similar]) / len(most_similar)
+
+        avg_similarities[n_neighbors] = avg_similarity
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10,6))
+    plt.plot(list(avg_similarities.keys()), list(avg_similarities.values()))
+    plt.xlabel('Number of Neighbors')
+    plt.ylabel('Average Similarity')
+    plt.title('Average Similarities vs Number of Neighbors')
+    plt.show()
+
+    najslicnijiIndeksi = list(set(najslicnijiIndeksi))
+    najslicnijiVektori = normalized_df[normalized_df.index.isin(najslicnijiIndeksi)]
+    najslicnijiVektori = najslicnijiVektori.to_string(header=False, index=False)
+    najslicnijePjesme = df[df.index.isin(najslicnijiIndeksi)]
+
+    najslicnijiVektori = najslicnijiVektori.strip()
+    lines = najslicnijiVektori.split('\n')
+    vektori = [line.split() for line in lines]
+    vektori = [[float(value) for value in row] for row in vektori]
+    matrica_vektora = np.array(vektori)
+    sim = cosine_similarity(matrica_vektora)
+
+    indeksi = []
+    for song_title in song_titles.song_titles:
+        for idx, item in enumerate(najslicnijePjesme.iterrows()):
+            if item[1]['name'].strip() == song_title:
                 indeksi.append(idx)
                 break
-      avg_sim = [0] * len(najslicnijePjesme)
-      for index in indeksi:
-          for col, value in enumerate(sim[index]):
-              avg_sim[col] += value / len(indeksi)
-      avg_sim = list(enumerate(avg_sim))
-      avg_sim = sorted(avg_sim, key = lambda x: x[1], reverse = True)
-      avg_sim = [sim_pair for sim_pair in avg_sim if sim_pair[0] not in indeksi]
-      if len(avg_sim) > 0:
-        avg_sim = sum(avg_sim[i][1] for i in range(len(avg_sim))) / len(avg_sim)
-      else:
-        avg_sim = 0
-      avg_sim_values.append(avg_sim)
-  plt.figure(figsize=(10, 6))
-  plt.plot(range(len(avg_sim_values)), avg_sim_values, marker='o')
-  plt.xlabel('Number of Neighbors')
-  plt.ylabel('Average Similarity')
-  plt.title('Average Similarity vs Number of Neighbors')
-  plt.grid(True)
-  plt.show()
-  recommendations = []
-  for i in range(len(avg_sim_values)):
-   row = najslicnijePjesme.iloc[avg_sim_values[i][0]]
-   song_name, song_album, song_artists = row['name'], row['album'], row['artists']
-   artist_objects = [Artist(name=artist['name'], id=artist['id']) for artist in song_artists]
-   recommendation = SuggestionModel(name=song_name, album=song_album, artists=artist_objects)
-   recommendations.append(recommendation)
-  return recommendations
+
+    avg_sim = [0] * len(najslicnijePjesme)
+    for index in indeksi:
+        for col, value in enumerate(sim[index]):
+            avg_sim[col] += value / len(indeksi)
+
+    avg_sim = list(enumerate(avg_sim))
+    avg_sim = sorted(avg_sim, key = lambda x: x[1], reverse = True)
+    avg_sim = [sim_pair for sim_pair in avg_sim if sim_pair[0] not in indeksi]
+
+    most_similar = avg_sim[0:15]
+
+    recommendations = []
+    for i in range(len(most_similar)):
+        row = najslicnijePjesme.iloc[most_similar[i][0]]
+        song_name, song_album, song_artists = row['name'], row['album'], row['artists']
+        artist_objects = [Artist(name=artist['name'], id=artist['id']) for artist in song_artists]
+        recommendation = SuggestionModel(name=song_name, album=song_album, artists=artist_objects)
+        recommendations.append(recommendation)
+
+    return recommendations
